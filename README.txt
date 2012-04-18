@@ -1,0 +1,1 @@
+This is project written to make use of the API of Https://us1.lacunaexpanse.com/api/ in C#.
