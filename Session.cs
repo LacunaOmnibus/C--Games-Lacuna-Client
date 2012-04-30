@@ -232,162 +232,15 @@ namespace LacunaExpanse
 			
 			start = DateTime.Now;
 
-      //DirectoryInfo dir = new DirectoryInfo("." + Path.DirectorySeparatorChar);
-
-      //System.IO.FileInfo [] info = dir.GetFiles("*.xml");
-
-      //foreach (FileInfo f in info) Console.WriteLine(f.Name);
 			
 			// If we already have an active session on server, don't bother with login
 			if ((DateTime.Now-date).TotalHours > 2)
         session.Login(session.cache.empire_name, session.cache.password);
-
-      //foreach (int i in Sqlite.GetNearestStars (208,250,30))
-        //Console.WriteLine (i);
 	
-			//Archaeology.GetGlyphs(session,"88311"); //Dot Net 3
-			//Archaeology.BuildHalls(session,"88311",5);
-			
-			//Archaeology.GetGlyphs(session,"1139384"); // Nexus Bend
-			//Archaeology.BuildHalls(session,"1139384",0);
-			
 
       Body.GetBuildings(session,session.cache.home_planet_id);
 
-      /*
-      JsonTextWriter req = session.Request("rearrange_buildings",
-                                           session.cache.session_id,
-                                           "530864");
-      req.WriteStartArray();
-      session.AddHashedParameters(req, "id","815960","x","-5","y","-1");
-      session.AddHashedParameters(req, "id","822541","x","3","y","0");
-      session.AddHashedParameters(req, "id","2001714","x","2","y","-3");
-
-      session.Post("/body",req);
-      /*
-			JsonTextWriter req = session.Request("generate_singularity",
-			                                     session.cache.session_id,
-			                                     "2604813");
-			                                     
-			session.AddHashedParameters(req,"body_name","Reaver Empire");
-			req.WriteString("Increase Size");
-
-			session.Post("/blackholegenerator",req);
-
-      Body.GetBuildings(session,"523697");
-
-      foreach (string key in session.r.result.buildings.Keys)
-      {
-        if (Regex.IsMatch(session.r.result.buildings[key].name,"Port"))
-        {
-          JsonTextWriter req = session.Request("view_all_ships",
-                                               session.cache.session_id,
-                                               key);
-
-          session.AddHashedParameters(req,"no_paging","1");
-          session.Post("/spaceport",req);
-          break;
-        }
-      }
-
-			JsonTextWriter req = session.Request("generate_singularity",
-			                                     session.cache.session_id,
-			                                     "80348");
-			session.AddHashedParameters(req,"body_name","DeLambert-10-341");
-			req.WriteString("Make Asteroid");
-			
-			JsonTextWriter req = session.Request("push_items",
-			                                     session.cache.session_id,
-			                                     "850201","533718");
-			req.WriteStartArray();
-			session.AddHashedParameters(req, "type","ship","ship_id","144452");
-			session.AddHashedParameters(req, "type","ship","ship_id","144453");
-			req.WriteEndArray();
-			session.AddHashedParameters(req, "ship_id","18904391"); // "stay","1" option
-			
-			session.Post("/trade",req);
-			
-			/*
-			JsonTextWriter req = session.Request("view_planet",
-			                                     session.cache.session_id,
-			                                     "1954588","528037");
-			
-			session.Post("/templeofthedrajilites",req);
-    			
-			JsonTextWriter req = session.Request("push_items",
-			                                     session.cache.session_id,
-			                                     "1056038",session.cache.home_planet_id);
-			
-			req.WriteStartArray ();
-			session.AddHashedParameters(req, "type","glyph","glyph_id","6313438");
-			req.WriteEndArray ();
-			session.AddHashedParameters(req, "ship_id","1798689");
-			
-			session.Post("/trade",req);
-			
-
-			JsonTextWriter req = session.Request("search_for_glyph",
-			                                     session.cache.session_id,
-			                                     "1139384","gold");
-			session.Post("/archaeology",req);
-
-
-			JsonTextWriter req = session.Request("get_buildings",
-			                                     session.cache.session_id,
-			                                     session.cache.home_planet_id);
-			session.Post("/body",req);
-			
-
-			JsonTextWriter req = session.Request("get_stars", //_all_ships",
-			                       								session.cache.session_id,
-			                       								"-60","220","-90","250");
-			session.Post("/map",req);			
-			
-
-			JsonTextWriter req = session.Request("list_planets",
-			                                     session.cache.session_id,
-			                                     "2762601","73507");
-			session.Post("/templeofthedrajilites",req);	
-			
-
-      JsonTextWriter req = session.Request("view_all_ships",
-                                           session.cache.session_id,
-                                           "2572252");
-
-      session.AddHashedParameters(req,"no_paging","1");
-      session.Post("/spaceport",req);
-			
-
-			JsonTextWriter req = session.Request("get_probed_stars",
-			                                     session.cache.session_id,
-			                                     "896833","0");
-			session.Post("/observatory",req);
-
-			JsonTextWriter req = session.Request("rearrange_buildings", //_all_ships",
-			                                     session.cache.session_id,
-			                                     "523697");
-			session.NewArray(req);
-			session.AddHashedParameters(req, "id","1056035","x","-4","y","0");
-
-			session.Post("/body",req);
-			
-
-			foreach (KeyValuePair<string,string> planet in session.myPlanets)
-			{
-				if (planet.Key == session.cache.home_planet_id) continue;
-				
-				req = session.Request("get_buildings", //_all_ships",
-				                       session.cache.session_id,
-				                       planet.Key);
-				session.Post("/body",req);					
-			}
-
-			Client.Request req = new Client.Request("rearrange_buildings",Client.SessionID,"525124");
-			
-			req.NewArray ();
-			req.AddHashedParameters("id","1539522","x","5","y","2");
-			req.AddHashedParameters("id","1539395","x","3","y","2");
-			*/
+ 
 			
 			session.Close();
 			session.Save();
@@ -552,13 +405,8 @@ namespace LacunaExpanse
 				return -1;				
 			}
 
-			//Log = File.AppendText("TLE.log");
-
 			if (onMessage != null && severity >= 7)
 				onMessage(this,"\n[{0}] Connecting...",DateTime.Now);
-
-			//Log.WriteLine("[{0}] Request sent",DateTime.UtcNow);
-			//Log.WriteLine("{0} {1}",URL,text);
 
 			try {
       	WebResponse response = request.GetResponse ();
