@@ -31,18 +31,20 @@ using System.Xml.Serialization;
 using Jayrock.Json;
 using Jayrock.Json.Conversion;
 
+using Result = LacunaExpanse.Response.Result; //Example of namespace alias
+
 namespace LacunaExpanse
 {
 	static class Archaeology
 	{
 		static string URL = "/archaeology";
 		
-		static Dictionary<string,object> glyphs;
+		static Dictionary<string,Stack<string>> glyphs;
 		
 		static Archaeology ()
 		{
-			glyphs = new Dictionary<string, object>();
-			
+			glyphs = new Dictionary<string,Stack<string>>();
+
 			// Build the glyph dictionary!
 			foreach (string [] recipe in HallRecipe)
 				foreach (string glyph in recipe)			
@@ -54,9 +56,25 @@ namespace LacunaExpanse
 			new string [] { "gold","anthracite","uraninite","bauxite"},
 			new string [] { "kerogen","methane","sulfur","zircon"},
 			new string [] { "rutile","chromite","chalcopyrite","galena"},
-			new string [] { "monazite","fluorite","beryl","magnetite"}};			
+			new string [] { "monazite","fluorite","beryl","magnetite"}};
+        
+    static string [] pType = new string[] {
+      "p11","p12","p11","p12","p12","p11","p11","p12","p11","p12",
+      "p12","p11","p12","p11","p12","p11","p12","p11","p12","p11"};
 		
-		public static void BuildHalls (Session session, string buildingID)
+		public static void AssembleGlyphs (Session session, string buildingID, params string [] ids)
+		{		
+			JsonTextWriter req = session.Request("assemble_glyphs",
+			                                     session.cache.session_id,
+			                                     buildingID);
+			req.WriteStartArray ();
+			foreach (string id in ids)
+				req.WriteString(id);
+			
+			session.Post(URL,req);
+		}
+		
+		public static void BuildHalls (Session session, string buildingID, int save)
 		{
 			int count,total=0;
 			
@@ -67,7 +85,7 @@ namespace LacunaExpanse
 		      	           	 Math.Min(((Stack<string>) glyphs[glyph[2]]).Count,
 		        	                  	((Stack<string>) glyphs[glyph[3]]).Count));
 			
-				for (int i = count; i > 0; i--) {			
+				for (int i = count; i > save; i--) {			
 					JsonTextWriter req = session.Request("assemble_glyphs",
 				                                     session.cache.session_id,
 				                                     buildingID);
@@ -82,14 +100,21 @@ namespace LacunaExpanse
 				}
 			}
 			
-			Console.WriteLine("\n{0} hall(s) assembled!\n",total);
-			
-			foreach (string [] recipe in HallRecipe)
-			{
-				foreach (string glyph in recipe)
-					Console.WriteLine("{0} : {1}",glyph,((Stack<string>) glyphs[glyph]).Count);
-				Console.WriteLine();
-			}
+			Console.WriteLine("\n{0} hall(s) assembled!",total);
+
+      IEnumerator pEnum = pType.GetEnumerator();
+
+      foreach (string [] recipe in HallRecipe)
+      {
+        Console.WriteLine();
+        foreach (string glyph in recipe)
+        {
+          pEnum.MoveNext();
+          Console.WriteLine("{0,3:D} {1}-{2}",
+                            ((Stack<string>) glyphs[glyph]).Count,
+                            pEnum.Current.ToString(),glyph);
+        }
+      }
 		}
 		
 		public static void GetGlyphs (Session session, string buildingID)
@@ -98,28 +123,41 @@ namespace LacunaExpanse
 			                                     session.cache.session_id,
 			                                     buildingID);
 			
-			session.onData += ProcessResult;
-			session.Post(URL,req);
-			session.onData -= ProcessResult;
+			//session.onData += ProcessResult;
 			
-			foreach (string [] recipe in HallRecipe)
-			{
-				foreach (string glyph in recipe)
-					Console.WriteLine("{0} : {1}",glyph,((Stack<string>) glyphs[glyph]).Count);
-				Console.WriteLine();
+			if (session.Post(URL,req) == 0) {
+        //Next two lines perform same thing old ProcessResult did
+        foreach (Result.Glyph glyph in session.response.result.glyphs)
+          ((Stack<string>) (glyphs[glyph.type])).Push(glyph.id);
+
+        IEnumerator pEnum = pType.GetEnumerator();
+				foreach (string [] recipe in HallRecipe)
+				{
+					Console.WriteLine();
+					foreach (string glyph in recipe)
+          {
+            pEnum.MoveNext();
+            Console.WriteLine("{0,3:D} {1}-{2}",
+                            ((Stack<string>) glyphs[glyph]).Count,
+                            pEnum.Current.ToString(),glyph);
+          }
+				}
+				
+				int count = 0;
+
+        foreach (string [] glyph in HallRecipe)
+					count += Math.Min(Math.Min(((Stack<string>) glyphs[glyph[0]]).Count,
+				                           	((Stack<string>) glyphs[glyph[1]]).Count),
+				                  	Math.Min(((Stack<string>) glyphs[glyph[2]]).Count,
+				                           	((Stack<string>) glyphs[glyph[3]]).Count));
+
+        Console.WriteLine("\nYou can build {0} hall(s)",count);
 			}
-			
-			int count = 0;
-			
-			foreach (string [] glyph in HallRecipe)
-				count += Math.Min(Math.Min(((Stack<string>) glyphs[glyph[0]]).Count,
-			                           	((Stack<string>) glyphs[glyph[1]]).Count),
-			                  	Math.Min(((Stack<string>) glyphs[glyph[2]]).Count,
-			                           	((Stack<string>) glyphs[glyph[3]]).Count));
-			
-			Console.WriteLine("You can build {0} hall(s)",count);
+			//session.onData -= ProcessResult;
 		}
-		
+
+    // Code below is no longer being used (old Jayrock processing method)
+
 		static string myGlyph = "";
 		
 		static void ProcessResult (string result, string member, string data)

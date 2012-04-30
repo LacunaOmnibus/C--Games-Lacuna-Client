@@ -26,6 +26,9 @@ using System.Collections.Specialized;
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Timers;
+using System.Web.Script.Serialization;
 using System.Xml.Serialization;
 
 using Jayrock.Json;
@@ -33,15 +36,30 @@ using Jayrock.Json.Conversion;
 
 namespace LacunaExpanse
 {
-	  
+	/*
+	[Food] 	+25% food per hour 	5 		 
+	[Ore] 	+25% ore per hour 	5 		 
+	[Water] 	+25% water per hour 	5 		 
+	[Energy] 	+25% energy per hour 	5 		 
+	[Happiness] 	+25% happiness per hour 	5 		 
+	[Storage] 	+25% storage capacity 	5 		9:53:28
+	[Building] 	+25% build speed 	5 		
+	*/
+	
   [Serializable]
   public class Colony
   {
     public Colony() { }  // Default constructor is required for xml.
     
-    public Colony(Colony i)
+    public Colony(Colony c)
     {    
     }
+		
+		public Colony (string cKey, string cName)
+		{
+			id = cKey;
+			name = cName;
+		}
     
     public string name;
     public string id;
@@ -52,15 +70,27 @@ namespace LacunaExpanse
 	{
     [XmlElement]
 		public string password;
-		
 		public string empire_name;
+    public string server;
+    public string database;
 
-		public string home_planet_id;
+    public string session_id;
 
-		public string session_id;
+    public string time;
+    
+    public int rpcCount;
+    public int rpcLimit;
+		
+		public string boostEnergy;
+		public string boostOre;
+		public string boostFood;
+		public string boostBuilding;
+		public string boostStorage;
+		public string boostWater;
+		public string boostHappiness;
 
-		public string time;
-	  		        
+    public string home_planet_id;
+		
     [XmlElement(typeof(Colony))]
     public ArrayList colony;
         
@@ -69,9 +99,9 @@ namespace LacunaExpanse
       colony = new ArrayList();
     }
     
-    public void Add(Colony i)
+    public void Add(Colony c)
     {
-      colony.Add(i);
+      colony.Add(c);
     }
 	}
 
@@ -123,28 +153,19 @@ namespace LacunaExpanse
 		{
 		}
 	}
-
+	
 	public class Session
 	{
 		public Cache cache;
+
+    private Response r;
 
 		private string serverURL;
 		private string sessionLog;
 		private string sessionCache;
 		private string sessionName;
-		
-		private NameValueCollection myBucket;
-		
-		private Dictionary<string, string> myBody;
-		private Dictionary<string, string> myEmpire;
-		private Dictionary<string, string> myError;
-		private Dictionary<string, string> myPlanets;
-		private Dictionary<string, string> myResult;
-		private Dictionary<string, string> myServer;
 
-		public delegate void CacheData(string result, string member, string data);
-
-		public event CacheData onData;
+		private Dictionary<string, Colony> myColony;
 		
 		public delegate void Message(object sender, string format, params object [] arg);
 		
@@ -161,10 +182,31 @@ namespace LacunaExpanse
 		static string API_KEY = "anonymous";
 		
 		private StreamWriter Log;
+	
+		/*
+		0 - Emergency (emerg)
+		1 - Alerts (alert)
+		2 - Critical (crit)
+		3 - Errors (err)
+		4 - Warnings (warn)
+		5 - Notification (notice)
+		6 - Information (info)
+		7 - Debug (debug) 	
+		*/
+		
+		static int severity = 6;
+		
+		static DateTime start;
+		
+		static long throttle = 1;
+		
+		static System.Timers.Timer timer;
 		
 		public static void Main(string[] args)
     {
 			Session session = new Session("Empire Server","https://us1.lacunaexpanse.com");
+      
+      //Session session = new Session("Empire Server",null);
 
 			Console.WriteLine(DateTime.Now.ToString("dd MM yyyy HH:mm:ss zzzz"));
 			Console.WriteLine(session.cache.time); // 13 02 2012 14:55:58 +0000
@@ -178,20 +220,82 @@ namespace LacunaExpanse
 
 			Console.WriteLine(date.ToString("dd MM yyyy HH:mm:ss zzzz"));
 
-			if (session.cache.empire_name == "")
-			  session.cache.empire_name = "Your empire name";
+			if (session.cache.empire_name == null)
+			  session.cache.empire_name = "name";
 			
-			if (session.cache.password == "")
-			  session.cache.password = "Your password";
+			if (session.cache.password == null)
+			  session.cache.password = "password";
+			
+			timer = new System.Timers.Timer(1000); // Setup timer with one second interval
+			timer.Elapsed += TimerTick;
+			timer.Start();
+			
+			start = DateTime.Now;
+
+      //DirectoryInfo dir = new DirectoryInfo("." + Path.DirectorySeparatorChar);
+
+      //System.IO.FileInfo [] info = dir.GetFiles("*.xml");
+
+      //foreach (FileInfo f in info) Console.WriteLine(f.Name);
 			
 			// If we already have an active session on server, don't bother with login
 			if ((DateTime.Now-date).TotalHours > 2)
-			  session.Login(session.cache.empire_name,session.cache.password);
+        session.Login(session.cache.empire_name, session.cache.password);
+
+      //foreach (int i in Sqlite.GetNearestStars (208,250,30))
+        //Console.WriteLine (i);
+	
+			//Archaeology.GetGlyphs(session,"88311"); //Dot Net 3
+			//Archaeology.BuildHalls(session,"88311",5);
 			
-			Archaeology.GetGlyphs(session,"1139384");
-			Archaeology.BuildHalls(session,"1139384");
+			//Archaeology.GetGlyphs(session,"1139384"); // Nexus Bend
+			//Archaeology.BuildHalls(session,"1139384",0);
 			
-			/*
+
+      Body.GetBuildings(session,session.cache.home_planet_id);
+
+      /*
+      JsonTextWriter req = session.Request("rearrange_buildings",
+                                           session.cache.session_id,
+                                           "530864");
+      req.WriteStartArray();
+      session.AddHashedParameters(req, "id","815960","x","-5","y","-1");
+      session.AddHashedParameters(req, "id","822541","x","3","y","0");
+      session.AddHashedParameters(req, "id","2001714","x","2","y","-3");
+
+      session.Post("/body",req);
+      /*
+			JsonTextWriter req = session.Request("generate_singularity",
+			                                     session.cache.session_id,
+			                                     "2604813");
+			                                     
+			session.AddHashedParameters(req,"body_name","Reaver Empire");
+			req.WriteString("Increase Size");
+
+			session.Post("/blackholegenerator",req);
+
+      Body.GetBuildings(session,"523697");
+
+      foreach (string key in session.r.result.buildings.Keys)
+      {
+        if (Regex.IsMatch(session.r.result.buildings[key].name,"Port"))
+        {
+          JsonTextWriter req = session.Request("view_all_ships",
+                                               session.cache.session_id,
+                                               key);
+
+          session.AddHashedParameters(req,"no_paging","1");
+          session.Post("/spaceport",req);
+          break;
+        }
+      }
+
+			JsonTextWriter req = session.Request("generate_singularity",
+			                                     session.cache.session_id,
+			                                     "80348");
+			session.AddHashedParameters(req,"body_name","DeLambert-10-341");
+			req.WriteString("Make Asteroid");
+			
 			JsonTextWriter req = session.Request("push_items",
 			                                     session.cache.session_id,
 			                                     "850201","533718");
@@ -221,52 +325,53 @@ namespace LacunaExpanse
 			
 			session.Post("/trade",req);
 			
-			/*
+
 			JsonTextWriter req = session.Request("search_for_glyph",
 			                                     session.cache.session_id,
 			                                     "1139384","gold");
 			session.Post("/archaeology",req);
 
-			/*
+
 			JsonTextWriter req = session.Request("get_buildings",
 			                                     session.cache.session_id,
 			                                     session.cache.home_planet_id);
 			session.Post("/body",req);
 			
-			/*
+
 			JsonTextWriter req = session.Request("get_stars", //_all_ships",
 			                       								session.cache.session_id,
 			                       								"-60","220","-90","250");
 			session.Post("/map",req);			
 			
-			/*
+
 			JsonTextWriter req = session.Request("list_planets",
 			                                     session.cache.session_id,
-			                                     "1954588","73507");
+			                                     "2762601","73507");
 			session.Post("/templeofthedrajilites",req);	
 			
-			/*
-			JsonTextWriter req = session.Request("view_all_ships",
-			                                     session.cache.session_id,
-			                                     "82335");
-			session.Post("/spaceport",req);
+
+      JsonTextWriter req = session.Request("view_all_ships",
+                                           session.cache.session_id,
+                                           "2572252");
+
+      session.AddHashedParameters(req,"no_paging","1");
+      session.Post("/spaceport",req);
 			
-			/*
+
 			JsonTextWriter req = session.Request("get_probed_stars",
 			                                     session.cache.session_id,
 			                                     "896833","0");
-			session.Post("/observatory",req);			
-			
-			/*
+			session.Post("/observatory",req);
+
 			JsonTextWriter req = session.Request("rearrange_buildings", //_all_ships",
 			                                     session.cache.session_id,
 			                                     "523697");
 			session.NewArray(req);
-			session.AddHashedParameters(req, "id","2128626","x","-4","y","0");
+			session.AddHashedParameters(req, "id","1056035","x","-4","y","0");
 
 			session.Post("/body",req);
 			
-			/*
+
 			foreach (KeyValuePair<string,string> planet in session.myPlanets)
 			{
 				if (planet.Key == session.cache.home_planet_id) continue;
@@ -283,48 +388,55 @@ namespace LacunaExpanse
 			req.AddHashedParameters("id","1539522","x","5","y","2");
 			req.AddHashedParameters("id","1539395","x","3","y","2");
 			*/
-		
+			
 			session.Close();
 			session.Save();
+		}
+		
+		static void TimerTick (object sender, System.Timers.ElapsedEventArgs e)
+		{
+			if ((DateTime.Now-start).TotalSeconds > 60 && Interlocked.Read(ref throttle) > 0)
+				Interlocked.Decrement(ref throttle);
 		}
 
 		public Session (string session, string server)
 		{
-			this.sessionName = session;
-			this.serverURL = server;
+			sessionName = session;
+
+      sessionLog = sessionName + ".log";
+      sessionCache = sessionName + ".xml";
+      Load();
+
+      if (server != null) cache.server = server;
+
+      serverURL = cache.server;
 			
-			switch (server)
+			switch (serverURL)
 			{
 				case "https://us1.lacunaexpanse.com":
 					API_KEY = "6093dbf6-e0cf-4df1-b9ba-707a52120c37";
+          //Sqlite.dbName = "us1.db";
 					break;
 				case "https://pt.lacunaexpanse.com":
 					API_KEY = "8f5159ad-4e1a-4460-bccf-22e6d56820bc";
+          //Sqlite.dbName = "pt.db";
 					break;
 			}
-
-			this.sessionLog = sessionName + ".log";
-			this.sessionCache = sessionName + ".xml";
-			this.Load();
-
+			
 			if (Regex.IsMatch(sessionLog,sessionName))
 				Log = File.CreateText(sessionLog);
 			else
 				Log = File.AppendText(sessionLog);
-			
-			myBucket = new NameValueCollection();
-			
-			myBody = new Dictionary<string, string>();
-			myEmpire = new Dictionary<string, string>();
-			myError = new Dictionary<string, string>();
-			myPlanets = new Dictionary<string, string>();
-			myServer = new Dictionary<string, string>();
-			myResult = new Dictionary<string, string>();
 
-			//this.onData += UpdateCache;
-			this.onMessage += ConsoleMessage;
-			this.onServerError += PrintError;
-			this.onServerStatus += Status;
+			myColony = new Dictionary<string, Colony>();
+			
+			foreach (Colony c in cache.colony)
+				myColony.Add(c.id,c);
+			
+			//onData += UpdateCache;
+			onMessage += ConsoleMessage;
+			onServerError += PrintError;
+			onServerStatus += Status;
 		}
 		
 		public void ConsoleMessage (object sender, string format, params object [] arg)
@@ -343,8 +455,8 @@ namespace LacunaExpanse
 		public void Login (string empire, string password)
 		{
 			JsonTextWriter req = Request("login",empire,password,API_KEY);
-
-			Post("/empire",req);
+			
+			if (Post("/empire",req) == 0) cache.session_id = r.result.session_id;
 		}
 
 		public JsonTextWriter Request (string method, params string [] list)
@@ -402,7 +514,7 @@ namespace LacunaExpanse
 		// Return error code
 		public int Post (string url, JsonTextWriter json)
 		{
-      HttpWebRequest request = (HttpWebRequest) WebRequest.Create (serverURL+url);
+      WebRequest request = WebRequest.Create (serverURL+url);
 
       request.Method = "POST";
 
@@ -418,15 +530,32 @@ namespace LacunaExpanse
       byte[] postdata = System.Text.Encoding.ASCII.GetBytes (text);
 
 			request.ContentLength = postdata.Length;
+			
+			// Wait one second when 60th RPC call is made during minute
+			if (Interlocked.Read(ref throttle) == 60)
+			{
+				if (onMessage != null && severity >= 6) 
+					onMessage(this,"[{0}] Throttling...", DateTime.Now);
+				while (Interlocked.Read(ref throttle) == 60)
+					Thread.Sleep(1000);
+			}
+			
+			if (timer.Enabled) Interlocked.Increment(ref throttle);
+      
+			try {
+				Stream stream = request.GetRequestStream ();
 
-			Stream stream = request.GetRequestStream ();
-
-      stream.Write (postdata, 0, postdata.Length);
-      stream.Close ();
+      	stream.Write (postdata, 0, postdata.Length);
+      	stream.Close ();
+			} catch (System.Net.WebException ex) {
+				if (onMessage != null && severity >= 3) onMessage(this,ex.Message);
+				return -1;				
+			}
 
 			//Log = File.AppendText("TLE.log");
 
-			if (onMessage != null) onMessage(this,"\n[{0}] Connecting...",DateTime.Now);
+			if (onMessage != null && severity >= 7)
+				onMessage(this,"\n[{0}] Connecting...",DateTime.Now);
 
 			//Log.WriteLine("[{0}] Request sent",DateTime.UtcNow);
 			//Log.WriteLine("{0} {1}",URL,text);
@@ -440,12 +569,11 @@ namespace LacunaExpanse
 				  WebResponse response = ex.Response;
 					ProcessResponse(response);
 					ServerErrorEventArgs args =
-						new ServerErrorEventArgs(int.Parse(myError["code"]),
-						                         myError["data"],myError["message"]);
+						new ServerErrorEventArgs(r.error.code,r.error.data,r.error.message);
 					if (onServerError != null) onServerError(this,args);
-					return int.Parse(myError["code"]);
+					return r.error.code;
 				} else {
-					if (onMessage != null) onMessage(this,ex.Message);
+					if (onMessage != null && severity >= 3) onMessage(this,ex.Message);
 					return -1;
 				}
 			}			
@@ -456,7 +584,8 @@ namespace LacunaExpanse
 		{
 			StreamReader sr = new StreamReader(response.GetResponseStream());
 
-			if (onMessage != null) onMessage(this,"[{0}] Reading response...",DateTime.Now);
+			if (onMessage != null && severity >= 7)
+				onMessage(this,"[{0}] Reading response...",DateTime.Now);
 
 			string data = sr.ReadToEnd ();
 
@@ -465,14 +594,15 @@ namespace LacunaExpanse
     	Log.Write("Response: ");
     	Log.WriteLine (data.ToString()+"\n");
 
-			if (onMessage != null) onMessage(this,"[{0}] Processing response...",DateTime.Now);
+			if (onMessage != null && severity >= 7)
+				onMessage(this,"[{0}] Processing response...",DateTime.Now);
 
 			using (JsonTextReader reader = new JsonTextReader(new StringReader(data)))
 			{
-				string result="",text = "";
+        string text = "";
 				
 				Stack<string> level = new Stack<string>();
-				Stack<string> token = new Stack<string>();
+				//Stack<string> token = new Stack<string>();
 				
 				while(reader.Read())
 				{
@@ -483,51 +613,66 @@ namespace LacunaExpanse
 							break;
 						case "Array":
 						case "Object":
-							if (text == "") 
+							if (text == "")
 								Log.WriteLine("[{0}] {1} ()",level.Count,reader.TokenClass);
 							else
 								Log.WriteLine("({0})",reader.TokenClass);
-							if (level.Count < 3) result = text;
 							level.Push(text);
-							text = "";
+              text = "";
 							break;
 						case "EndArray":
 						case "EndObject":
 							Log.WriteLine("[{0}] {1} ({2})",level.Count-1,reader.TokenClass,level.Pop());
-							if (level.Count < 3 && level.Count > 0 ) 
-								result = level.Peek();
 							break;
 						case "BOF":
 						case "EOF":
 							break;
 						default :
 							Log.WriteLine("{0} ({1})",reader.Text,reader.TokenClass);
-							switch (result)
-							{
-								case "error":
-									if (myError.ContainsKey(text))
-										myError[text] = reader.Text;
-									else
-										myError.Add(text,reader.Text);
-									break;
-								case "result":
-								case "status":
-									UpdateStatus(level.Peek(),text,reader.Text);
-									break;
-								default:
-									if (onData != null) onData(result,text,reader.Text);
-									text = "";
-									break;									
-							}
 							break;
 					}
 				}
 				
-				if (onMessage != null) onMessage(this,"[{0}] Processing complete!\n",DateTime.Now);
+				if (onMessage != null && severity >= 7)
+					onMessage(this,"[{0}] Processing complete!\n",DateTime.Now);
+				
+				if (onMessage != null && severity >= 6)
+					onMessage(this,"\n[{0}] {1} RPC call(s) remaining today",
+					          DateTime.Now, cache.rpcLimit - cache.rpcCount);
 
 				Log.WriteLine("-------------------------");
+        Log.Flush();  // if we crash when we Deserialize, we still get the log!
 			}
+
+      JavaScriptSerializer js = new JavaScriptSerializer();
+
+      r = js.Deserialize<Response>(data);
+
+      if (r.error != null) return;
+
+      // Cache what we need from status, if no errors
+      cache.time = r.result.status.server.time;
+      cache.rpcCount = r.result.status.empire.rpc_count;
+      cache.rpcLimit = r.result.status.server.rpc_limit;
+      cache.home_planet_id = r.result.status.empire.home_planet_id;
+
+      // Update or add planet names to session cache
+      foreach (KeyValuePair<string,string> p in r.result.status.empire.planets)
+      {
+        if (myColony.ContainsKey(p.Key)) {
+          myColony[p.Key].name = p.Value;
+        } else {
+          Colony colony = new Colony(p.Key,p.Value);
+          myColony.Add(p.Key,colony);
+          cache.colony.Add(colony);
+        }
+      }
 		}
+
+    public Response response
+    {
+      get { return r; }
+    }
 
 	  void Save()
 	  {
@@ -539,69 +684,7 @@ namespace LacunaExpanse
 
 		void Status (object sender, ServerStatusEventArgs e)
 		{
-			if (onMessage != null) onMessage(this,"Success!\n");
-		}
-
-		void UpdateStatus(string result, string member, string text)
-		{
-			switch (result)
-			{
-				case "body":
-					if (myBody.ContainsKey(member))
-						myBody[member] = text;
-					else
-						myBody.Add(member,text);
-					break;
-				case "empire":
-					if (myEmpire.ContainsKey(member))
-						myEmpire[member] = text;
-					else
-						myEmpire.Add(member,text);
-					switch (member)
-					{
-						case "home_planet_id":
-							cache.home_planet_id = text;
-							break;
-					}
-					break;/*
-				case "error":
-					if (myError.ContainsKey(member))
-						myError[member] = text;
-					else
-						myError.Add(member,text);
-					break;*/
-				case "planets":
-					if (myPlanets.ContainsKey(member)) break;
-					myPlanets.Add(member,text);
-					break;
-				case "result":
-					if (myResult.ContainsKey(member))
-						myResult[member] = text;
-					else
-						myResult.Add(member,text);
-					switch (member)
-					{
-						case "session_id":
-							cache.session_id = text;
-							break;
-					}
-					break;
-				case "server":
-					if (myServer.ContainsKey(member))
-						myServer[member] = text;
-					else
-						myServer.Add(member,text);
-					switch (member)
-					{
-						case "time":
-							cache.time = text;
-							break;
-					}
-					break;
-				default:
-					myBucket.Add(member,text);
-					break;
-			}
+			if (onMessage != null && severity >= 7) onMessage(this,"Success!\n");
 		}
 	}
 }
